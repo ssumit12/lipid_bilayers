@@ -1,0 +1,13 @@
+#include "wMartiniPolW.itp"
+#include "dpsm.itp"
+#include "chol.itp"
+
+[ system ]
+DPSM/CHOL BILAYER (with 30% CHOL)
+
+[ molecules ]
+DPSM	179
+CHOL	76
+DPSM	179
+CHOL	76
+PW 	10834

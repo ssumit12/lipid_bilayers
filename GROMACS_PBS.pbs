@@ -1,0 +1,114 @@
+#PBS -l walltime=96:00:00
+#PBS -l nodes=1:ppn=8:gpus=1
+#PBS -N wetCool2902chol30
+#PBS -S /bin/bash
+
+echo ----
+echo "Job started at $(date)"
+echo "This job is working on compute node $PBS_NODEFILE"
+echo "This job id is $PBS_JOBID"
+
+module load intel/16.0.3
+module load mvapich2/2.2
+module load gromacs/5.1.2
+module load cuda/8.0.44
+module list
+cd $PBS_O_WORKDIR
+pbsdcp wMartiniPolW.itp dpsm.itp chol.itp system.top config.gro em.mdp nvt.mdp npt.mdp md.mdp BinaryDpsmChol.f90 $TMPDIR
+cd $TMPDIR
+
+#---------------------------------------------------------------
+
+#MD RUN
+
+gmx_gpu grompp -f em.mdp -c config.gro -p system.top -o em.tpr
+gmx_gpu mdrun -s em.tpr -ntmpi 8 -deffnm em
+
+gmx_gpu grompp -f nvt.mdp -c em.gro -p system.top -o nvt.tpr
+gmx_gpu mdrun -s nvt.tpr -ntmpi 8 -rdd 1.6 -deffnm nvt
+
+gmx_gpu grompp -f npt.mdp -c nvt.gro -t nvt.cpt -p system.top -o npt.tpr
+gmx_gpu mdrun -s npt.tpr -ntmpi 8 -rdd 1.6 -deffnm npt
+
+gmx_gpu grompp -f md.mdp -c npt.gro -t npt.cpt -p system.top -o md.tpr
+gmx_gpu mdrun -s md.tpr -ntmpi 8 -rdd 1.6 -deffnm md
+
+#---------------------------------------------------------------
+
+#ANALYSIS
+
+#energy
+gmx_gpu energy -f md.edr -o box.xvg << EOF
+5 6 7 8 9 10 11 12 14 15
+EOF
+#---------------------------------------------------------------
+#making index 
+#System = 0, Other = 1, DPSM = 2, CHOL = 3, PW = 4
+gmx_gpu make_ndx -f md.tpr -o index.ndx << EOF
+del 1
+name 1 dpsm
+name 2 chol
+name 3 polWater
+a po4
+name 4 phosphate
+a t1a c2a c3a c1b c2b c3b c4b
+name 5 chain
+r dpsm chol
+name 6 lipids
+a am1
+a t1a
+a c1b
+a r3
+q
+EOF
+#---------------------------------------------------------------
+#thickness
+gmx_gpu traj -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -dt 1000 -ng 1 -oxt phosphate.pdb << EOF
+4
+EOF
+#---------------------------------------------------------------
+#order parameter
+gmx_gpu traj -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -dt 1000 -ng 1 -oxt chain.pdb << EOF
+5
+EOF
+#---------------------------------------------------------------
+#cholesterol
+gmx_gpu traj -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -dt 1000 -ng 1 -oxt cholesterol.pdb << EOF
+2
+EOF
+#---------------------------------------------------------------
+#vmd
+gmx_gpu traj -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -dt 1000 -ng 1 -oxt vmd-lipids.pdb << EOF
+6
+EOF
+#---------------------------------------------------------------
+#density profile
+gmx_gpu density -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -dt 50 -center yes -relative yes -o chol-density.xvg << EOF
+0
+2
+EOF
+#---------------------------------------------------------------
+#msd
+gmx_gpu msd -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -lateral z -beginfit -1 -endfit -1 -ngroup 1 -o msd-dpsm.xvg << EOF
+7
+EOF
+gmx_gpu msd -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -lateral z -beginfit -1 -endfit -1 -ngroup 1 -o msd-chol.xvg << EOF
+10
+EOF
+#---------------------------------------------------------------
+#rdf
+gmx_gpu rdf -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -xy yes -ref 9 -sel 9 -o rdf-lipid-lipid.xvg
+gmx_gpu rdf -s md.tpr -f md.xtc -n index.ndx -b 0 -e 1000000 -xy yes -ref 9 -sel 10 -o rdf-lipid-chol.xvg
+#---------------------------------------------------------------
+#fortran
+gfortran BinaryDpsmChol.f90 -o BinaryDpsmChol
+./BinaryDpsmChol
+
+
+
+
+
+
+cp -p * $PBS_O_WORKDIR/
+
+

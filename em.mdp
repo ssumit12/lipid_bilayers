@@ -1,0 +1,29 @@
+
+;Manual.GROMACS.ORG
+;http://manual.gromacs.org/documentation/5.1.4/user-guide/mdp-options.html
+
+last modified on July/05/2019
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+;Run Parameters
+integrator			= steep				; A steepest descent algorithm for energy minimization. The maximum step size is emstep, the tolerance is emtol
+emtol				= 1000.0  			; Stop minimization when the maximum force < 1000.0 kJ/mol/nm
+emstep     	 		= 0.01      		; Energy step size
+nsteps				= 50000	  			; Maximum number of (minimization) steps to perform
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+;Parameters describing how to find the neighbors of each atom and how to calculate the interactions
+cutoff-scheme 		= Verlet
+ns_type				= grid						; Method to determine neighbor list (simple, grid)
+nstlist				= 20	    				; Frequency to update the neighbor list and long range forces
+pbc		    		= xyz 						; Periodic Boundary Conditions
+
+coulombtype			= Reaction-Field			; Reaction field electrostatics with Coulomb cut-off rcoulomb, where rcoulomb >= rlist. The dielectric constant beyond the cut-off is epsilon-rf. The dielectric constant can be set to infinity by setting epsilon-rf =0
+epsilon-r			= 2.5						; The relative dielectric constant. A value of 0 means infinity
+epsilon-rf			= 0							; The relative dielectric constant of the reaction field. This is only used with reaction-field electrostatics. A value of 0 means infinity
+coulomb-modifier	= Potential-shift-Verlet	; shift the Coulomb potential by a constant such that it is zero at the cut-off with the Verlet cutoff-scheme, as it is (nearly) free
+rcoulomb         	= 1.1 						; short-range electrostatic cutoff (in nm)
+
+vdwtype         	= Cut-off 					; Twin range cut-offs with neighbor list cut-off rlist and VdW cut-off rvdw, where rvdw >= rlist.
+vdw-modifier 		= Potential-shift-Verlet	; Selects Potential-shift with the Verlet cutoff-scheme, as it is (nearly) free; selects None with the group cutoff-scheme
+rvdw             	= 1.1						; short-range van der Waals cutoff (in nm)
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,117 @@
+
+;Manual.GROMACS.ORG
+;http://manual.gromacs.org/documentation/5.1.4/user-guide/mdp-options.html
+
+last modified on July/05/2019
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+; TIMESTEP IN MARTINI 
+; Most simulations are numerically stable 
+; with dt=40 fs, some (especially rings) require 20-30 fs.
+; Note that time steps of 40 fs and larger may create local heating or 
+; cooling in your system. Although the use of a heat bath will globally 
+; remove this effect, it is advised to check consistency of 
+; your results for somewhat smaller time steps in the range 20-30 fs.
+; Time steps exceeding 40 fs should not be used; time steps smaller
+; than 20 fs are also not required.
+
+integrator       			= md						; a leap-frog algorithm for integrating Newton’s equations of motion
+dt               			= 0.010 					; 10 fs
+nsteps           			= 2500000					; 10 * 2500000 = 25 ns
+nstcalcenergy      			= 10						; number of steps that elapse between calculating the energies
+
+;Output control
+nstxout          			= 250000					; save coordinates every 2.5 ns
+nstvout          			= 250000					; save velocities every 2.5 ns
+nstlog           			= 250000 					; update log file every 2.5 ns
+nstenergy        			= 250000					; save energies every 2.5 ns
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+; NEIGHBOURLIST and MARTINI 
+; Due to the use of shifted potentials, the noise generated 
+; from particles leaving/entering the neighbour list is not so large, 
+; even when large time steps are being used. In practice, once every 
+; ten steps works fine with a neighborlist cutoff that is equal to the 
+; non-bonded cutoff (1.2 nm). However, to improve energy conservation 
+; or to avoid local heating/cooling, you may increase the update frequency (e.g. nstlist = 5) 
+; and/or enlarge the neighbourlist cut-off (rlist = 1.4 or 1.5 nm). The latter option 
+; is computationally less expensive and leads to improved energy conservation
+ 
+cutoff-scheme 	 			= Verlet					; Generate a pair list with buffering
+ns-type		     			= grid						; search neighboring grid cells
+nstlist 		 			= 20 						; frequency to update the neighbor list
+pbc 			 			= xyz						; 3D PBC
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+; MARTINI and NONBONDED 
+; Standard cut-off schemes are used for the non-bonded interactions 
+; in the Martini model: LJ interactions are shifted to zero in the 
+; range 0.9-1.2 nm, and electrostatic interactions in the range 0.0-1.2 nm. 
+; The treatment of the non-bonded cut-offs is considered to be part of 
+; the force field parameterization, so we recommend not to touch these 
+; values as they will alter the overall balance of the force field.
+; In principle you can include long range electrostatics through the use
+; of PME, which could be more realistic in certain applications 
+;
+; With the polarizable water model, the relative electrostatic screening 
+; (epsilon_r) should have a value of 2.5, representative of a low-dielectric
+; apolar solvent. The polarizable water itself will perform the explicit screening
+; in aqueous environment.
+
+coulombtype					= Reaction-Field			; Reaction field electrostatics with Coulomb cut-off rcoulomb, where rcoulomb >= rlist. The dielectric constant beyond the cut-off is epsilon-rf. The dielectric constant can be set to infinity by setting epsilon-rf =0
+epsilon-rf					= 0							; The relative dielectric constant of the reaction field. This is only used with reaction-field electrostatics. A value of 0 means infinity
+coulomb-modifier			= Potential-shift-Verlet	; shift the Coulomb potential by a constant such that it is zero at the cut-off with the Verlet cutoff-scheme, as it is (nearly) free
+rcoulomb         			= 1.1 						; short-range electrostatic cutoff (in nm)
+epsilon-r					= 2.5						; The relative dielectric constant. A value of 0 means infinity
+vdwtype         			= Cut-off 					; Twin range cut-offs with neighbor list cut-off rlist and VdW cut-off rvdw, where rvdw >= rlist.
+vdw-modifier 				= Potential-shift-Verlet	; Selects Potential-shift with the Verlet cutoff-scheme, as it is (nearly) free; selects None with the group cutoff-scheme
+rvdw             			= 1.1						; short-range van der Waals cutoff (in nm)
+DispCorr                 	= no						; don’t apply any correction (= EnerPres: apply long range dispersion corrections for Energy and Pressure)
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+; MARTINI and TEMPRATURE/PRESSURE
+; normal temperature and pressure coupling schemes can be used. 
+; It is recommended to couple individual groups in your system separately.
+; Good temperature control can be achieved with the Berendsen thermostat, 
+; using a coupling constant of the order of τ = 1 ps. Even better 
+; temperature control can be achieved by reducing the temperature coupling 
+; constant to 0.1 ps, although with such tight coupling (τ approaching 
+; the time step) one can no longer speak of a weak-coupling scheme.
+; We therefore recommend a coupling time constant of at least 0.5 ps.
+;
+; Similarly, pressure can be controlled with the Berendsen barostat, 
+; with a coupling constant in the range 1-5 ps and typical compressibility 
+; in the order of 10-4 - 10-5 bar-1. Note that, in order to estimate 
+; compressibilities from CG simulations, you should use Parrinello-Rahman 
+; type coupling.
+
+tcoupl           			= berendsen					; Temperature coupling with a Berendsen-thermostat to a bath with temperature ref-t, with time constant tau-t
+tc-grps          			= DPSM CHOL PW				; groups to couple separately to temperature bath
+tau-t            			= 1.0 1.0 1.0				; time constant for coupling (one for each group in tc-grps), -1 means no temperature coupling (in ps)
+ref-t            			= 290 290 290				; reference temperature for coupling (one for each group in tc-grps)
+pcoupl           			= no			 			; no pressure coupling. This means a fixed box size
+
+
+gen-vel                  	= no						; Do not generate velocities. The velocities are set to zero when there are no velocities in the input structure file
+gen-temp                 	= 290						; temperature for Maxwell distribution
+gen-seed                 	= 473529					; used to initialize random generator for random velocities, when gen-seed is set to -1, a pseudo random seed is used
+
+;-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+; MARTINI and CONSTRAINTS 
+; for ring systems constraints are defined
+; which are best handled using Lincs. 
+; Note, during energy minimization the constrainst should be
+; replaced by stiff bonds.
+
+constraints              	= none 						; No constraints except for those defined explicitly in the topology
+constraint-algorithm     	= LINCS						; LINear Constraint Solver
+lincs-order              	= 4							; Number of iterations to correct for rotational lengthening in LINCS. For normal runs a single step is sufficient
+lincs-warnangle          	= 30						; maximum angle that a bond can rotate before LINCS will complain
+continuation				= no		    			; Restarting after energy minimization
+
+
